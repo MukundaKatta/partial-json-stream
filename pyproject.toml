@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "partial-json-stream"
+version = "1.0.0"
+description = "Streaming JSON parser that yields partial valid trees as tokens arrive. For LLM tool calls, structured outputs, and partial recovery."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "Mukunda Katta", email = "mukunda.vjcs6@gmail.com" }]
+keywords = [
+  "json",
+  "streaming",
+  "parser",
+  "partial",
+  "incremental",
+  "llm",
+  "ai",
+  "tool-calls",
+  "structured-output",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Text Processing",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/MukundaKatta/partial-json-stream"
+Repository = "https://github.com/MukundaKatta/partial-json-stream"
+Issues = "https://github.com/MukundaKatta/partial-json-stream/issues"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
