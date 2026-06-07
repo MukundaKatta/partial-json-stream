@@ -133,7 +133,9 @@ def test_lenient_unquoted_keys():
 
 
 def test_lenient_prose_before_json():
-    assert parse_partial('Sure! Here is the JSON:\n```json\n{"ok":true}\n```') == {"ok": True}
+    assert parse_partial('Sure! Here is the JSON:\n```json\n{"ok":true}\n```') == {
+        "ok": True
+    }
 
 
 def test_lenient_line_comments():
@@ -149,7 +151,7 @@ def test_lenient_unicode_escape():
 
 
 def test_lenient_surrogate_pair():
-    assert parse_partial('"\\uD83D\\uDE80"') == "\U0001F680"
+    assert parse_partial('"\\uD83D\\uDE80"') == "\U0001f680"
 
 
 def test_strict_trailing_comma_array():
@@ -260,7 +262,9 @@ Anything else?"""
 
 
 def test_truncated_mid_deep_string():
-    truncated = '{"events":[{"id":"a"},{"id":"b"},{"id":"c","note":"this is going to be cut'
+    truncated = (
+        '{"events":[{"id":"a"},{"id":"b"},{"id":"c","note":"this is going to be cut'
+    )
     v = parse_partial(truncated)
     assert len(v["events"]) == 3
     assert v["events"][2]["id"] == "c"
@@ -291,3 +295,54 @@ def test_every_byte_snapshot_round_trips():
         json.loads(json.dumps(snap.value))
     p.end()
     assert p.snapshot().value == v
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '{"name":"Cla',
+        '{"a":1,"b":"hi',
+        '["x","incomp',
+        '{"k":"v","j":',
+        '{"a":1,"b":',
+        '{"name":',
+        "{abc",
+        '"top level str',
+        '{"items":[{"name":"foo","note":"trunc',
+    ],
+)
+def test_end_preserves_partial_snapshot(text):
+    # end() must perform the same synthetic closure as snapshot(): an open
+    # string, pending value, or unquoted key is preserved, never silently
+    # dropped. Regression test for data loss on truncated input.
+    p = JsonStreamParser()
+    p.push(text)
+    before = p.snapshot().value
+    p.end()
+    after = p.snapshot()
+    assert after.value == before
+    assert after.complete
+
+
+def test_end_keeps_open_string_value():
+    p = JsonStreamParser()
+    p.push('{"name":"Clau')
+    p.end()
+    assert p.snapshot().value == {"name": "Clau"}
+
+
+def test_end_pending_key_becomes_null():
+    p = JsonStreamParser()
+    p.push('{"a":1,"b":')
+    p.end()
+    assert p.snapshot().value == {"a": 1, "b": None}
+
+
+def test_end_complete_event_fires_once_on_truncated():
+    counter = {"n": 0}
+    p = JsonStreamParser()
+    p.on("complete", lambda v: counter.update(n=counter["n"] + 1))
+    p.push('{"name":"Cla')
+    p.end()
+    assert counter["n"] == 1
+    assert p.snapshot().value == {"name": "Cla"}

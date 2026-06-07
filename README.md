@@ -2,7 +2,7 @@
 
 [![pypi](https://img.shields.io/pypi/v/partial-json-stream.svg)](https://pypi.org/project/partial-json-stream/)
 [![python](https://img.shields.io/pypi/pyversions/partial-json-stream.svg)](https://pypi.org/project/partial-json-stream/)
-[![tests](https://img.shields.io/badge/tests-55%20passing-brightgreen.svg)](#)
+[![tests](https://img.shields.io/badge/tests-67%20passing-brightgreen.svg)](#)
 [![zero deps](https://img.shields.io/badge/dependencies-0-blue.svg)](#)
 
 A streaming JSON parser that yields **partial valid trees** as tokens arrive.

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import copy
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 
@@ -148,6 +148,10 @@ class JsonStreamParser:
             self._commit_number()
         if self._state == "literal":
             self._commit_literal()
+        if self._state in ("string", "string-esc", "string-uXXXX"):
+            self._commit_open_string()
+        if self._state == "unquoted-key":
+            self._commit_open_unquoted_key()
 
         if self._state == "done":
             self._emit_partial()
@@ -160,6 +164,9 @@ class JsonStreamParser:
         while self._stack:
             top = self._stack[-1]
             if top.kind == "object" and top.pending_key is not None:
+                # Synthetic closure: a key whose value never arrived becomes
+                # null, mirroring snapshot() semantics rather than dropping it.
+                top.obj.setdefault(top.pending_key, None)
                 top.pending_key = None
             self._pop_container()
 
@@ -303,7 +310,10 @@ class JsonStreamParser:
         if not self.lenient and ord(ch) < 0x20:
             self._fail(f"unescaped control character in string: U+{ord(ch):04X}")
             return
-        if self.max_string_length is not None and len(self._str) >= self.max_string_length:
+        if (
+            self.max_string_length is not None
+            and len(self._str) >= self.max_string_length
+        ):
             self._fail("string exceeds max_string_length")
             return
         self._str += ch
@@ -340,7 +350,11 @@ class JsonStreamParser:
                 self._high_surrogate = code
             elif 0xDC00 <= code <= 0xDFFF:
                 if self._high_surrogate is not None:
-                    combined = ((self._high_surrogate - 0xD800) << 10) + (code - 0xDC00) + 0x10000
+                    combined = (
+                        ((self._high_surrogate - 0xD800) << 10)
+                        + (code - 0xDC00)
+                        + 0x10000
+                    )
                     self._str += chr(combined)
                     self._high_surrogate = None
                 else:
@@ -452,7 +466,9 @@ class JsonStreamParser:
             self._path.pop()
             while self._stack:
                 t = self._stack[-1]
-                if (ch == "}" and t.kind == "object") or (ch == "]" and t.kind == "array"):
+                if (ch == "}" and t.kind == "object") or (
+                    ch == "]" and t.kind == "array"
+                ):
                     self._pop_container()
                     self._after_value_commit()
                     return
@@ -463,7 +479,12 @@ class JsonStreamParser:
 
     def _commit_value(self, value: JsonValue) -> None:
         top = self._stack[-1] if self._stack else None
-        if top and top.kind == "object" and self._state == "string" and top.pending_key is None:
+        if (
+            top
+            and top.kind == "object"
+            and self._state == "string"
+            and top.pending_key is None
+        ):
             top.pending_key = str(value)
             self._path.append(top.pending_key)
             self._state = "colon"
@@ -513,6 +534,27 @@ class JsonStreamParser:
             self._fail(f"unknown literal: {lit!r}")
             return
         self._commit_value(_LITERALS[lit])
+
+    def _commit_open_string(self) -> None:
+        # Close a string that is still in progress at end of input. Mirrors the
+        # synthetic closure that snapshot() already performs, so the final value
+        # keeps the partial string instead of discarding it.
+        s = self._str
+        self._str = ""
+        self._high_surrogate = None
+        self._commit_value(s)
+
+    def _commit_open_unquoted_key(self) -> None:
+        # Close an unquoted key still being read at end of input. The value never
+        # arrives, so the key is later filled with null by end()'s closure loop.
+        top = self._stack[-1] if self._stack else None
+        if top is None or top.kind != "object":
+            self._str = ""
+            return
+        top.pending_key = self._str
+        self._path.append(self._str)
+        self._str = ""
+        self._state = "colon"
 
     def _push_container(self, c) -> None:
         if len(self._stack) >= self.max_depth:
@@ -602,7 +644,11 @@ class JsonStreamParser:
                 return self._str
             if self._state == "number":
                 try:
-                    return int(self._num) if "." not in self._num and "e" not in self._num.lower() else float(self._num)
+                    return (
+                        int(self._num)
+                        if "." not in self._num and "e" not in self._num.lower()
+                        else float(self._num)
+                    )
                 except ValueError:
                     return None
             if self._state == "literal":
@@ -642,7 +688,11 @@ class JsonStreamParser:
                     node[top.pending_key] = None
         elif s == "number":
             try:
-                v = int(self._num) if "." not in self._num and "e" not in self._num.lower() else float(self._num)
+                v = (
+                    int(self._num)
+                    if "." not in self._num and "e" not in self._num.lower()
+                    else float(self._num)
+                )
             except ValueError:
                 v = None
             self._patch_scratch(cloned, v)
